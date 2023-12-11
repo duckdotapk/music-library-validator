@@ -2,11 +2,15 @@
 // Imports
 //
 
+import fs from "node:fs";
+import path from "node:path";
+
+import chalk from "chalk";
+
 import { processMusicCollection } from "./functions/process-music-collection.js";
 
 import { environmentVariables } from "./instances/environment-variables.js";
-import fs from "node:fs";
-import path from "node:path";
+
 import { ProcessError } from "./types/ProcessError.js";
 
 //
@@ -48,6 +52,15 @@ for (const processArtistResult of result.processArtistResults)
 			errors.push(...processFileResult.errors);
 		}
 	}
+}
+
+if (errors.length == 0)
+{
+	console.log(chalk.green("No errors, hooray!"));
+}
+else
+{
+	console.error(chalk.red("Something is fucked, yo. Check errors.json for details."));
 }
 
 await fs.promises.writeFile(path.join(environmentVariables.RESULTS_OUTPUT_DIRECTORY, "errors.json"), JSON.stringify(errors, null, "\t"));
