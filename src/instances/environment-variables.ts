@@ -13,4 +13,6 @@ import z from "zod";
 export const environmentVariables = z.object(
 	{
 		"MUSIC_DIRECTORY": z.string(),
+
+		"RESULTS_OUTPUT_DIRECTORY": z.string(),
 	}).parse(process.env);

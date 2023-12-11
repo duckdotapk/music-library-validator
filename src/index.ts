@@ -2,151 +2,52 @@
 // Imports
 //
 
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { processMusicCollection } from "./functions/process-music-collection.js";
 
 import { environmentVariables } from "./instances/environment-variables.js";
+import fs from "node:fs";
+import path from "node:path";
+import { ProcessError } from "./types/ProcessError.js";
 
 //
 // Music Library Validator
 //
 
-await processMusicCollection(
+const result = await processMusicCollection(
 	{
-		musicDirectoryPath: environmentVariables.MUSIC_DIRECTORY,
+		musicDirectory: environmentVariables.MUSIC_DIRECTORY,
 	});
 
 //
-// Functions
+// Output Results
 //
 
-interface ProcessMusicCollectionOptions
-{
-	musicDirectoryPath : string;
-}
-
-async function processMusicCollection(options : ProcessMusicCollectionOptions)
-{
-	console.log("Processing music collection: " + options.musicDirectoryPath);
-
-	const directoryEntries = await fs.promises.readdir(options.musicDirectoryPath,
-		{
-			withFileTypes: true,
-		});
-
-	for (const directoryEntry of directoryEntries)
+await fs.promises.mkdir(environmentVariables.RESULTS_OUTPUT_DIRECTORY,
 	{
-		if (!directoryEntry.isDirectory())
-		{
-			continue;
-		}
+		recursive: true,
+	});
 
-		// Ignore SyncThing Folder
-		if (directoryEntry.name == ".stfolder")
-		{
-			continue;
-		}
+await fs.promises.writeFile(path.join(environmentVariables.RESULTS_OUTPUT_DIRECTORY, "results.json"), JSON.stringify(result, null, "\t"));
 
-		await processArtist(
-			{
-				...options,
+//
+// Output Errors
+//
 
-				artistDirectoryName: directoryEntry.name,
-				artistDirectoryPath: path.join(options.musicDirectoryPath, directoryEntry.name),
-			});
-	}
-}
+const errors : ProcessError[] = [];
 
-interface ProcessArtistOptions extends ProcessMusicCollectionOptions
+for (const processArtistResult of result.processArtistResults)
 {
-	artistDirectoryName : string;
+	errors.push(...processArtistResult.errors);
 
-	artistDirectoryPath : string;
-}
-
-async function processArtist(options : ProcessArtistOptions)
-{
-	console.log("Processing artist: " + options.artistDirectoryName);
-
-	const directoryEntries = await fs.promises.readdir(options.artistDirectoryPath,
-		{
-			withFileTypes: true,
-		});
-
-	for (const directoryEntry of directoryEntries)
+	for (const processAlbumResult of processArtistResult.processAlbumResults)
 	{
-		if (!directoryEntry.isDirectory())
+		errors.push(...processAlbumResult.errors);
+
+		for (const processFileResult of processAlbumResult.processFileResults)
 		{
-			continue;
-		}
-
-		await processAlbum(
-			{
-				...options,
-
-				albumDirectoryName: directoryEntry.name,
-				albumDirectoryPath: path.join(options.artistDirectoryPath, directoryEntry.name),
-			});
-	}
-}
-
-interface ProcessAlbumOptions extends ProcessArtistOptions
-{
-	albumDirectoryName : string;
-
-	albumDirectoryPath : string;
-}
-
-async function processAlbum(options : ProcessAlbumOptions)
-{
-	console.log("Processing album: " + options.albumDirectoryName);
-
-	const directoryEntries = await fs.promises.readdir(options.albumDirectoryPath,
-		{
-			withFileTypes: true,
-		});
-
-	for (const directoryEntry of directoryEntries)
-	{
-		if (!directoryEntry.isFile())
-		{
-			continue;
-		}
-
-		switch (directoryEntry.name.toLowerCase())
-		{
-			case "cover.jpg":
-			case "thumbs.db":
-			{
-				break;
-			}
-
-			default:
-			{
-				await processFile(
-					{
-						...options,
-
-						trackFileName: directoryEntry.name,
-						trackFilePath: path.join(options.albumDirectoryPath, directoryEntry.name),
-					});
-
-				break;
-			}
+			errors.push(...processFileResult.errors);
 		}
 	}
 }
 
-interface ProcessFileOptions extends ProcessAlbumOptions
-{
-	trackFileName : string;
-
-	trackFilePath : string;
-}
-
-async function processFile(options : ProcessFileOptions)
-{
-	console.log("Processing file: " + options.trackFilePath);
-
-	// TODO: actual processing
-}
+await fs.promises.writeFile(path.join(environmentVariables.RESULTS_OUTPUT_DIRECTORY, "errors.json"), JSON.stringify(errors, null, "\t"));
