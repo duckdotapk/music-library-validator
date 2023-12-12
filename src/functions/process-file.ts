@@ -10,6 +10,7 @@ import { validSourceTagValues } from "../data/valid-source-tag-values.js";
 
 import { findSourceTag } from "./find-source-tag.js";
 import { getExpectedAlbumDirectoryName } from "./get-expected-album-directory-name.js";
+import { isMultiArtistRemix } from "./is-multi-artist-remix.js";
 
 import { ProcessFileOptions } from "../types/ProcessFileOptions.js";
 import { ProcessFileResult } from "../types/ProcessFileResult.js";
@@ -23,6 +24,12 @@ const seenArtistNames = new Map<string, { name : string, filePath : string }>();
 
 export async function processFile(options : ProcessFileOptions) : Promise<ProcessFileResult>
 {
+	//
+	// Log
+	//
+
+	console.log("Processing file: " + options.filePath);
+
 	//
 	// Initialize Result
 	//
@@ -165,6 +172,15 @@ export async function processFile(options : ProcessFileOptions) : Promise<Proces
 						});
 				}
 			}
+		}
+
+		if (isMultiArtistRemix(parsedMetadata.common.title) && parsedMetadata.common.artists.length == 1)
+		{
+			processFileResult.errors.push(
+				{
+					message: "Track seems to be a remix but only has one artist.",
+					path: options.filePath,
+				});
 		}
 	}
 
