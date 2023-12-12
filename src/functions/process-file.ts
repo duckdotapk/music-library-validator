@@ -2,11 +2,14 @@
 // Imports
 //
 
+import path from "node:path";
+
 import musicMetadata, { IAudioMetadata } from "music-metadata";
 
 import { validSourceTagValues } from "../data/valid-source-tag-values.js";
 
 import { findSourceTag } from "./find-source-tag.js";
+import { getExpectedAlbumDirectoryName } from "./get-expected-album-directory-name.js";
 
 import { ProcessFileOptions } from "../types/ProcessFileOptions.js";
 import { ProcessFileResult } from "../types/ProcessFileResult.js";
@@ -16,6 +19,7 @@ import { ProcessFileResult } from "../types/ProcessFileResult.js";
 // Function
 //
 
+const seenArtistNames = new Map<string, { name : string, filePath : string }>();
 
 export async function processFile(options : ProcessFileOptions) : Promise<ProcessFileResult>
 {
@@ -29,6 +33,12 @@ export async function processFile(options : ProcessFileOptions) : Promise<Proces
 
 			errors: [],
 		};
+
+	//
+	// Parse File Path
+	//
+
+	const parsedFilePath = path.parse(options.filePath);
 
 	//
 	// Parse Metadata
@@ -63,24 +73,100 @@ export async function processFile(options : ProcessFileOptions) : Promise<Proces
 				path: options.filePath,
 			});
 	}
+	else if (parsedMetadata.common.albumartist != options.artistDirectoryName)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Album artist does not match artist directory name.",
+				path: options.filePath,
+			});
+	}
 
-	// TODO: should match the folder name
-	//  Also, for non "Various Artists" albums, there should only be ONE album artist
+	if (parsedMetadata.common.albumartist != null)
+	{
+		if (seenArtistNames.get(parsedMetadata.common.albumartist.toLowerCase()) == null)
+		{
+			seenArtistNames.set(parsedMetadata.common.albumartist.toLowerCase(),
+				{
+					name: parsedMetadata.common.albumartist,
+					filePath: options.filePath,
+				});
+		}
+		else
+		{
+			const existingArtistName = seenArtistNames.get(parsedMetadata.common.albumartist.toLowerCase());
+
+			if (existingArtistName!.name != parsedMetadata.common.albumartist)
+			{
+				processFileResult.errors.push(
+					{
+						message: "Similar artists: \"" + parsedMetadata.common.albumartist + "\" and \"" + existingArtistName!.name + "\" (" + existingArtistName!.filePath + ")",
+						path: options.filePath,
+					});
+			}
+		}
+	}
 
 	//
 	// Check Album
 	//
 
-	// TODO: Ensure folder name is the same as the album name (filenamified for Windows)
+	if (parsedMetadata.common.album == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing album.",
+				path: options.filePath,
+			});
+	}
+	else if (getExpectedAlbumDirectoryName(parsedMetadata.common.album) != options.albumDirectoryName)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Album directory name does not match album name.",
+				path: options.filePath,
+			});
+	}
 
 	//
 	// Check Artists
 	//
 
-	// TODO: Check for &, commas, x, etc.
-	//  Require artists to be separated by ;
+	if (parsedMetadata.common.artists == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing artists.",
+				path: options.filePath,
+			});
+	}
+	else
+	{
+		for (const artist of parsedMetadata.common.artists)
+		{
+			if (seenArtistNames.get(artist.toLowerCase()) == null)
+			{
+				seenArtistNames.set(artist.toLowerCase(),
+					{
+						name: artist,
+						filePath: options.filePath,
+					});
+			}
+			else
+			{
+				const existingArtistName = seenArtistNames.get(artist.toLowerCase());
 
-	// TODO: Check for similar artist names and suggest merging them
+				if (existingArtistName!.name != artist)
+				{
+					processFileResult.errors.push(
+						{
+							message: "Similar album artists: \"" + artist + "\" and \"" + existingArtistName!.name + "\" (" + existingArtistName!.filePath + ")",
+							path: options.filePath,
+						});
+				}
+			}
+		}
+	}
 
 	//
 	// Check Composer
@@ -108,19 +194,100 @@ export async function processFile(options : ProcessFileOptions) : Promise<Proces
 			});
 	}
 
-	// TODO: Assure date is only a year (cannot be fucking bothered getting full dates for every album, but year should be easy?)
-
 	//
 	// Check Disc Number / Track Number / Total Discs / Total Tracks
 	//
 
-	// TODO: Assure all are specified and none are 0
+	if (parsedMetadata.common.disk.no == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing disc number.",
+				path: options.filePath,
+			});
+	}
+	else if (parsedMetadata.common.disk.no == 0)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track has disc number of 0.",
+				path: options.filePath,
+			});
+	}
+
+	if (parsedMetadata.common.track.no == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing track number.",
+				path: options.filePath,
+			});
+	}
+	else if (parsedMetadata.common.track.no == 0)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track has track number of 0.",
+				path: options.filePath,
+			});
+	}
+
+	if (parsedMetadata.common.disk.of == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing total discs.",
+				path: options.filePath,
+			});
+	}
+	else if (parsedMetadata.common.disk.of == 0)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track has total discs of 0.",
+				path: options.filePath,
+			});
+	}
+
+	if (parsedMetadata.common.track.of == null)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track missing total tracks.",
+				path: options.filePath,
+			});
+	}
+	else if (parsedMetadata.common.track.of == 0)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Track has total tracks of 0.",
+				path: options.filePath,
+			});
+	}
 
 	//
 	// Check File Name
 	//
 
-	// TODO: Must match format <DISC_NUMBER>.<TRACK_NUMBER> - <TRACK_NAME>.<FILE_EXTENSION>
+	// Note: The following replacements remove various characters that aren't valid in Windows file paths
+	//	The exact replacements follow whatever foobar2000 decided should replace these characters in file names
+	const expectedFileName = (parsedMetadata.common.disk.no + "." + parsedMetadata.common.track.no?.toString().padStart(2, "0") + " - " + parsedMetadata.common.title + parsedFilePath.ext)
+		.replaceAll("*", "x")
+		.replaceAll(":", "-")
+		.replaceAll(":", "-")
+		.replaceAll("/", "-")
+		.replaceAll("?", "")
+		.replaceAll("\"", "''");
+
+	if (options.fileName != expectedFileName)
+	{
+		processFileResult.errors.push(
+			{
+				message: "Unexpected file name. Expected: " + expectedFileName,
+				path: options.filePath,
+			});
+	}
 
 	//
 	// Check Genre
