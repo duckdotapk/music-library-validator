@@ -8,6 +8,7 @@ import path from "node:path";
 import { ProcessAlbumOptions } from "../types/ProcessAlbumOptions.js";
 import { ProcessAlbumResult } from "../types/ProcessAlbumResult.js";
 import { processFile } from "./process-file.js";
+import { anyFileExists } from "./any-file-exists.js";
 
 //
 // Function
@@ -25,6 +26,25 @@ export async function processAlbum(options : ProcessAlbumOptions) : Promise<Proc
 			errors: [],
 			processFileResults: [],
 		};
+
+	//
+	// Check for Cover
+	//
+
+	const anyCoverExists = await anyFileExists(
+		[
+			path.join(options.albumDirectory, "cover.jpg"),
+			path.join(options.albumDirectory, "cover.png"),
+		]);
+
+	if (!anyCoverExists)
+	{
+		result.errors.push(
+			{
+				message: `Album missing cover image.`,
+				path: options.albumDirectory,
+			});
+	}
 
 	//
 	// Iterate Directory
